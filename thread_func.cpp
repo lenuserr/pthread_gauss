@@ -1,9 +1,10 @@
 #include <iostream>
+#include <cmath>
 #include <sys/sysinfo.h>
 #include <string.h>
 #include <sched.h>
 #include "inc.h"
-// вспоминаю как коммитить изменения на гитхаб
+
 void* thread_func(void* ptr) {
     static pthread_mutex_t M = PTHREAD_MUTEX_INITIALIZER;
     Args* ap = (Args*)ptr;
@@ -39,7 +40,10 @@ void* thread_func(void* ptr) {
     reduce_sum<int>(p);
 
     // здесь выделение локальных буферных массивов вспомогательных.
-    double* block1 = new double[n]; // для копирования "главной" строки во все потоки.
+    //double* block1 = new double[n]; // для копирования "главной" строки во все потоки.
+    double* block = new double[m*m];
+    int* rows = new int[m];
+    double* vec = new double[2];
 
     if (!name.empty()) {
         int res = 0;
@@ -71,7 +75,7 @@ void* thread_func(void* ptr) {
     //t = get_cpu_time();
     // solve(a, b, n, p, m, k);
     // t = get_cpu_time() - t;
-
+    /*
     pthread_mutex_lock(&M);
     std::cout << "РАБОТАЕТ ПОТОК ПОД НОМЕРОМ " << k << "\n\n\n";
     int f = n / m;
@@ -91,8 +95,117 @@ void* thread_func(void* ptr) {
     } 
     std::cout << "ПОТОК ПОД НОМЕРОМ " << k << " ЗАКОНЧИЛ РАБОТУ" << "\n\n\n";
     pthread_mutex_unlock(&M);
+    */
 
-    delete[] block1;
+    int f = n / m;
+    int l = n - f * m;
+    for (int t = 0; t < f; ++t) {
+        int q = t % p;
+        i = (k - q) >= 0 ? (t + k - q) : (t + k + p - q);
+        double max_norm_block = -1;
+        int row_max_block = -1;
+        for (; i < f; i += p) {
+            get_block(i, t, n, m, f, l, a, block);
+            double block_norm = matrix_norm(m, m, block);
+            // block_norm - EPS * a_norm надо. потом посчитаю a_norm, пока не надо и лень.
+            if (block_norm - EPS > max_norm_block && is_inv(m, block, 1, rows)) {
+                max_norm_block = block_norm;
+                row_max_block = i;
+            }
+            /*
+            for (int v = 0; v < m; ++v) {
+                for (int z = 0; z < m; ++z) {
+                    std::cout << block[m*v + z] << " ";  
+                }
+                std::cout << "\n";
+            }
+            */
+        }
+
+        pthread_mutex_lock(&M);
+        std::cout << "ШАГ " << t << ". РАБОТАЕТ ПОТОК ПОД НОМЕРОМ " << k << "\n";
+        std::cout << "Local max norm block: " << max_norm_block << " Row: " << row_max_block << "\n\n\n";
+        pthread_mutex_unlock(&M);
+        vec[0] = max_norm_block;
+        vec[1] = row_max_block;
+        reduce_sum(p, vec, 2, &max); //чтобы выбрать главный элемент по столбцу.
+        max_norm_block = vec[0];
+        row_max_block = vec[1];
+        pthread_mutex_lock(&M);
+        std::cout << "ШАГ " << t << ". РАБОТАЕТ ПОТОК ПОД НОМЕРОМ " << k << "\n";
+        std::cout << "Global max norm block: " << max_norm_block << " Row: " << row_max_block << "\n\n\n";
+        pthread_mutex_unlock(&M);
+    } 
+
+    delete[] block;
+    delete[] rows;
+    delete[] vec;
+    // delete[] block1;
 
     return nullptr;
+}
+
+void get_block(int i, int j, int n, int m, int f, int l, double* matrix, double* block1) {
+    int h = i < f ? m : l;
+    int w = j < f ? m : l;
+    
+    int ind = 0;
+
+    for (int p = 0; p < h; ++p) {
+        for (int q = 0; q < w; ++q) {
+            block1[ind] = matrix[n * (m * i + p) + m * j + q];
+            ind++;
+        }
+    }
+}
+
+double matrix_norm(int n, int m, double* matrix) {
+    double norm = -1;
+    for (int j = 0; j < m; ++j) {
+        double sum = 0;
+        for (int i = 0; i < n; ++i) {
+            sum += std::fabs(matrix[m*i + j]);           
+        }
+
+        norm = std::max(norm, sum);
+    }
+
+    return norm;
+}
+
+bool is_inv(int m, double* matrix, double a_norm, int* rows) {
+    for (int k = 0; k < m; ++k) {
+        rows[k] = k;
+    }
+
+    for (int i = 0; i < m; ++i) {
+        double max_elem = matrix[rows[i] * m + i];
+        int row_max_elem = i;
+        for (int j = i + 1; j < m; ++j) {
+            if (std::fabs(matrix[rows[j] * m + i]) - EPS * a_norm > std::fabs(max_elem)) {
+                max_elem = matrix[rows[j] * m + i];
+                row_max_elem = j;
+            }
+        }
+
+        std::swap(rows[i], rows[row_max_elem]);
+
+        if (std::fabs(max_elem) < EPS * a_norm) {
+            return false;    
+        }
+
+        double factor = 1 / max_elem;
+        for (int s = i; s < m; ++s) {
+            matrix[rows[i] * m + s] *= factor;
+        }
+
+        for (int k = i + 1; k < m; ++k) {
+            double multiplier = -matrix[rows[k] * m + i];
+            for (int p = i + 1; p < m; ++p) { 
+                matrix[rows[k] * m + p] += matrix[rows[i] * m + p] * multiplier;
+            }
+        }
+    }
+
+    return true;
 }

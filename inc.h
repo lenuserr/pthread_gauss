@@ -1,3 +1,4 @@
+#define EPS 1e-14
 #pragma once
 #include <string>
 #include <pthread.h>
@@ -6,6 +7,9 @@ void init_matrix(double* matrix, int n, int m, int s, int p, int k);
 void init_b(double* matrix, double* b, int n, int m, int p, int k);
 int read_array(double* array, int n, const std::string& name_file);
 void output(double* array, int n, int r, int l);
+void get_block(int i, int j, int n, int m, int k, int l, double* matrix, double* block1);
+double matrix_norm(int n, int m, double* matrix);
+bool is_inv(int m, double* matrix, double a_norm, int* rows);
 void* thread_func(void* ptr);
 
 class Args {
@@ -44,6 +48,18 @@ template<class T>
 void min(T* r, T* a, int n) {
     for (int i = 0; i < n; ++i) {
         r[i] = std::min(r[i], a[i]);
+    }
+}
+
+template<class T>
+void max(T* r, T* a, int n) {
+    if (n != 2) {
+        return;
+    }
+    
+    if (a[0] > r[0] + EPS) {
+        r[0] = a[0];
+        r[1] = a[1]; 
     }
 }
 
