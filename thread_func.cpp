@@ -3,7 +3,7 @@
 #include <string.h>
 #include <sched.h>
 #include "inc.h"
-
+// вспоминаю как коммитить изменения на гитхаб
 void* thread_func(void* ptr) {
     static pthread_mutex_t M = PTHREAD_MUTEX_INITIALIZER;
     Args* ap = (Args*)ptr;
