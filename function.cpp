@@ -71,6 +71,14 @@ double matrix_norm(int n, int m, double* matrix) {
     return norm;
 }
 
+void subtract_matrix_inplace(int n, int m, double* a, double* b) {
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < m; ++j) {
+            a[m*i + j] -= b[m*i + j];           
+        }
+    }
+}
+
 bool inverse_matrix(int m, double* matrix, double* identity, double a_norm) {
 
     for (int i = 0; i < m; ++i) {

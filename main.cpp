@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
 
     double* a = new double[n*n]; 
     double* b = new double[n];
-    double* c = new double[n];
+    double* x = new double[n];
 
     Args* ap = nullptr;
     pthread_t* tid = nullptr;
@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
     tid = new pthread_t[p];
     
     for (k = 0; k < p; ++k) {
-        ap[k].a = a; ap[k].b = b; ap[k].c = c;
+        ap[k].a = a; ap[k].b = b; ap[k].x = x;
         ap[k].n = n; ap[k].m = m; ap[k].p = p; ap[k].k = k;
         ap[k].r = r; ap[k].s = s; ap[k].filename = filename;
     }
@@ -42,19 +42,21 @@ int main(int argc, char* argv[]) {
 
     if (ap[0].res < 0) {
         std::cout << "Problems reading from a file " << filename << "\n";
-        delete[] a; delete[] b; delete[] c;
+        delete[] a; delete[] b; delete[] x;
         delete[] ap; delete[] tid;   
         return -1;  
     }        
 
     if (ap[0].method_not_applicable) {
         std::cout << "Method is not applicable" << "\n";
-        delete[] a; delete[] b; delete[] c;
+        delete[] a; delete[] b; delete[] x;
         delete[] ap; delete[] tid;   
         return -2;
     }
 
-    delete[] a; delete[] b; delete[] c;
+    //output(x, n, r, 1);
+
+    delete[] a; delete[] b; delete[] x;
     delete[] ap; delete[] tid;    
 
     return 0;

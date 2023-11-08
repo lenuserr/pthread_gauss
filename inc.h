@@ -18,13 +18,14 @@ void copy_block_row(double* a, double* main_row, int n, int m, int t);
 void swap_block_rows(double* a, int t, int row_max_block, int j_l, int j_r, int n, int m);
 void swap_rows(double* matrix, int n, int i, int j);
 void matrix_product(int n, int m, int k, double* a, double* b, double* c);
+void subtract_matrix_inplace(int n, int m, double* a, double* b);
 void* thread_func(void* ptr);
 
 class Args {
 public:
     double* a = nullptr;    
     double* b = nullptr;    
-    double* c = nullptr;      
+    double* x = nullptr;      
 
     int n = 0;
     int m = 0;

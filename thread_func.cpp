@@ -12,7 +12,7 @@ void* thread_func(void* ptr) {
     Args* ap = (Args*)ptr;
     double* a = ap->a;
     double* b = ap->b;
-    double* c = ap->c;
+    double* x = ap->x;
 
     int n = ap->n;
     int m = ap->m;
@@ -36,7 +36,7 @@ void* thread_func(void* ptr) {
         int h = (i + m < n) ? m : n - i; 
         memset(a + i*n, 0, h*n*sizeof(double));
         memset(b + i, 0, h*sizeof(double));
-        memset(c + i, 0, h*sizeof(double));
+        memset(x + i, 0, h*sizeof(double));
     }
 
     reduce_sum<int>(p);
@@ -56,7 +56,7 @@ void* thread_func(void* ptr) {
             res = read_array(a, n, name);
         }
 
-        reduce_sum(p, &res, 1);
+        reduce_sum(p, &res, 1, &sum);
         if (res < 0) { 
             ap->res = res; 
             delete[] block1;
@@ -77,7 +77,7 @@ void* thread_func(void* ptr) {
     
     double a_norm = -1;
     if (k == 0) {
-        output(a, n, r, n);      
+        //output(a, n, r, n);      
         a_norm = matrix_norm(n, n, a);
     }
     reduce_sum(p, &a_norm, 1, &maximum);
@@ -159,11 +159,12 @@ void* thread_func(void* ptr) {
         */
 
         reduce_sum<int>(p);
-        
         // копируем в каждый поток главную блочную строку и главную часть вектора b не забываем.
         copy_block_row(a, main_row, n, m, t);
-        // на вектор b пока забью, поработаю сначала с матрицей.
-        
+        for (int v = 0; v < m; ++v) {
+            main_b[v] = b[m*t + v];
+        }
+
         reduce_sum<int>(p);
 
         i = (k - q) >= 0 ? (t + k - q) : (t + k + p - q);
@@ -171,34 +172,48 @@ void* thread_func(void* ptr) {
         for (; i < h; i += p) {
             get_block(i, t, n, m, f, l, a, block1);
             int multiplier_rows = i < f ? m : l;
-            for (int r = t + 1; r < h; ++r) { 
-                get_block(t, r, n, m, f, l, a, block2); 
+            for (int r = t + 1; r < h; ++r) {
+                get_block(0, r, n, m, f, l, main_row, block2); 
                 int block_cols = r < f ? m : l;
-                //matr_prod(multiplier_rows, m, block_cols, block1, block2, block3);
-                //get_block(block_rows[q], r, n, m, k, l, matrix, block2);
-                //subtract_matrix_inplace(multiplier_rows, block_cols, block2, block3);
-                //put_block(block_rows[q], r, n, m, k, l, block2, matrix);
-            }
-        }
-        
-        /*
-        for (int q = i + 1; q < h; ++q) {
-            get_block(block_rows[q], i, n, m, k, l, matrix, block1); 
-            int multiplier_rows = q < k ? m : l;
-            for (int r = i + 1; r < h; ++r) { 
-                get_block(block_rows[i], r, n, m, k, l, matrix, block2); 
-                int block_cols = r < k ? m : l;
-                matr_prod(multiplier_rows, m, block_cols, block1, block2, block3);
-                get_block(block_rows[q], r, n, m, k, l, matrix, block2);
+                matrix_product(multiplier_rows, m, block_cols, block1, block2, block3);
+                get_block(i, r, n, m, f, l, a, block2);
                 subtract_matrix_inplace(multiplier_rows, block_cols, block2, block3);
-                put_block(block_rows[q], r, n, m, k, l, block2, matrix);
+                put_block(i, r, n, m, f, l, block2, a);
             }
 
-            matr_prod(multiplier_rows, m, 1, block1, b + m*block_rows[i], block3);
-            subtract_matrix_inplace(1, multiplier_rows, b + m*block_rows[q], block3);
-        }
-        */       
+            matrix_product(multiplier_rows, m, 1, block1, main_b, block3);
+            subtract_matrix_inplace(1, multiplier_rows, b + m*i, block3);
+        }      
     } 
+
+    if (l) {
+        int res = 0;
+        if (k == f % p) {
+            get_block(f, f, n, m, f, l, a, block1);  
+
+            if (inverse_matrix(l, block1, block2, a_norm)) {
+                matrix_product(l, l, 1, block2, b + m*f, block3);
+                put_vector(f, m, f, l, block3, x);  
+            } else {
+                res = -1;
+            }
+        }
+
+        reduce_sum(p, &res, 1, &sum);
+        if (res < 0) { 
+            ap->method_not_applicable = true; 
+            delete[] block1;
+            delete[] block2;
+            delete[] block3;
+            delete[] main_row;
+            delete[] main_b;
+            delete[] vec;
+            return nullptr;
+        }
+    }
+
+    // прямой ход метода Гаусса завершен.
+    // остался обратный. Подумай, почитай идеи в отчете других(Влада) ес чо.
 
     delete[] block1;
     delete[] block2;
