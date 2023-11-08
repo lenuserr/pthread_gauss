@@ -54,7 +54,9 @@ int main(int argc, char* argv[]) {
         return -2;
     }
 
-    //output(x, n, r, 1);
+    std::cout << "x:\n";
+    output(x, n, r, 1);
+    std::cout << "\n";
 
     delete[] a; delete[] b; delete[] x;
     delete[] ap; delete[] tid;    

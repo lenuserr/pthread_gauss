@@ -6,6 +6,8 @@
 // 15:15. 08.11.23. let's go code pthread gauss.
 // 18:50. напиши хоть как-то крч для начала. хотя я и так уже это 3 часа делаю)
 // потом надо на reduce sum проверить: недостающие поставить, лишние убрать, если такие будут.
+// 22:15. Обратный ход Гаусса.
+// 23:00. Всё понял про обратный ход. Ща сделаю.
 
 void* thread_func(void* ptr) {
     //static pthread_mutex_t M = PTHREAD_MUTEX_INITIALIZER;
@@ -32,23 +34,30 @@ void* thread_func(void* ptr) {
     pthread_setaffinity_np(tid, sizeof(cpu), &cpu);
     
     int i;
+    int cnt = 0;
     for (i = k*m; i < n; i += p*m) { // работаем со "своими" строками
         int h = (i + m < n) ? m : n - i; 
         memset(a + i*n, 0, h*n*sizeof(double));
         memset(b + i, 0, h*sizeof(double));
         memset(x + i, 0, h*sizeof(double));
+        cnt++;
     }
 
     reduce_sum<int>(p);
-
     // здесь выделение локальных буферных массивов вспомогательных.
-    //double* block1 = new double[n]; // для копирования "главной" строки во все потоки.
     double* block1 = new double[m*m];
     double* block2 = new double[m*m];
     double* block3 = new double[m*m];
     double* main_row = new double[m*n];
     double* main_b = new double[m];
     double* vec = new double[2];
+    double* block = new double[cnt*m];
+
+    for (int u = 0; u < cnt; ++u) {
+        for (int v = 0; v < m; ++v) {
+            block[m*u + v] = 0;
+        }
+    }
 
     if (!name.empty()) {
         int res = 0;
@@ -65,6 +74,7 @@ void* thread_func(void* ptr) {
             delete[] main_row;
             delete[] main_b;
             delete[] vec;
+            delete[] block;
             return nullptr;
         }
 
@@ -77,7 +87,9 @@ void* thread_func(void* ptr) {
     
     double a_norm = -1;
     if (k == 0) {
-        //output(a, n, r, n);      
+        std::cout << "A:\n";
+        output(a, n, r, n);
+        std::cout << "\n";
         a_norm = matrix_norm(n, n, a);
     }
     reduce_sum(p, &a_norm, 1, &maximum);
@@ -91,7 +103,7 @@ void* thread_func(void* ptr) {
     // вот она ниже моя solve функция пишется по сути. пока тут будет прост.
     int f = n / m;
     int l = n - f * m;
-    int h = l ? f + 1 : f;
+    [[maybe_unused]] int h = l ? f + 1 : f;
 
     for (int t = 0; t < f; ++t) {
         int q = t % p; // главная строка принадлежит q-ому потоку.
@@ -120,6 +132,7 @@ void* thread_func(void* ptr) {
             delete[] main_row;
             delete[] main_b;
             delete[] vec;
+            delete[] block;
             return nullptr;
         }
         
@@ -152,11 +165,11 @@ void* thread_func(void* ptr) {
             put_vector(t, m, f, l, block3, b);
         } 
 
-        /*
-        if (k == row_max_block % p) {
-            swap_block_rows(a, t, row_max_block, n / 2, n, n, m);            
-        } 
-        */
+        
+        //if (k == row_max_block % p) {
+        //    swap_block_rows(a, t, row_max_block, n / 2, n, n, m);            
+        //} 
+        
 
         reduce_sum<int>(p);
         // копируем в каждый поток главную блочную строку и главную часть вектора b не забываем.
@@ -184,6 +197,8 @@ void* thread_func(void* ptr) {
             matrix_product(multiplier_rows, m, 1, block1, main_b, block3);
             subtract_matrix_inplace(1, multiplier_rows, b + m*i, block3);
         }      
+
+        reduce_sum<int>(p);
     } 
 
     if (l) {
@@ -208,12 +223,43 @@ void* thread_func(void* ptr) {
             delete[] main_row;
             delete[] main_b;
             delete[] vec;
+            delete[] block;
             return nullptr;
         }
     }
 
     // прямой ход метода Гаусса завершен.
-    // остался обратный. Подумай, почитай идеи в отчете других(Влада) ес чо.
+    // Обратный ход:
+
+    for (int j = h - 1; j > 0; --j) {
+        int u_border = (j < f) ? m : l; 
+        for (int u = 0; u < u_border; ++u) {
+            main_b[u] = x[m*j + u]; // скопировали в каждый поток x_j.
+        }
+
+        int cols = j < f ? m : l;
+        int counter = 0;
+        for (i = k; i < j; i += p) { // по своим строкам иду
+            get_block(i, j, n, m, f, l, a, block1);
+            matrix_product(m, cols, 1, block1, main_b, block3);
+            
+            for (int v = 0; v < m; ++v) {
+                block[counter*m + v] += block3[v];
+            }
+            counter++;
+        }
+
+        if (k == (j - 1) % p) {
+            for (int u = 0; u < cols; ++u) {
+                b[(j - 1) * m + u] -= block[(cnt - 1) * m + u]; 
+            }
+            cnt--;
+
+            put_vector(j - 1, m, f, l, b + (j - 1) * m, x);
+        }
+
+        reduce_sum<int>(p);
+    }    
 
     delete[] block1;
     delete[] block2;
@@ -221,6 +267,7 @@ void* thread_func(void* ptr) {
     delete[] main_row;
     delete[] main_b;
     delete[] vec;
+    delete[] block;
 
     reduce_sum<int>(p);
     return nullptr;
