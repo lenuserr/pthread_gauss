@@ -1,12 +1,14 @@
-#include <iostream>
-#include <cmath>
 #include <sys/sysinfo.h>
 #include <string.h>
 #include <sched.h>
 #include "inc.h"
 
+// 15:15. 08.11.23. let's go code pthread gauss.
+// 18:50. напиши хоть как-то крч для начала. хотя я и так уже это 3 часа делаю)
+// потом надо на reduce sum проверить: недостающие поставить, лишние убрать, если такие будут.
+
 void* thread_func(void* ptr) {
-    static pthread_mutex_t M = PTHREAD_MUTEX_INITIALIZER;
+    //static pthread_mutex_t M = PTHREAD_MUTEX_INITIALIZER;
     Args* ap = (Args*)ptr;
     double* a = ap->a;
     double* b = ap->b;
@@ -17,7 +19,7 @@ void* thread_func(void* ptr) {
     int p = ap->p;
     int k = ap->k;
     int s = ap->s;
-    //int r = ap->r;
+    [[maybe_unused]] int r = ap->r;
     std::string name = ap->filename;
 
     cpu_set_t cpu;
@@ -41,8 +43,11 @@ void* thread_func(void* ptr) {
 
     // здесь выделение локальных буферных массивов вспомогательных.
     //double* block1 = new double[n]; // для копирования "главной" строки во все потоки.
-    double* block = new double[m*m];
-    int* rows = new int[m];
+    double* block1 = new double[m*m];
+    double* block2 = new double[m*m];
+    double* block3 = new double[m*m];
+    double* main_row = new double[m*n];
+    double* main_b = new double[m];
     double* vec = new double[2];
 
     if (!name.empty()) {
@@ -52,160 +57,156 @@ void* thread_func(void* ptr) {
         }
 
         reduce_sum(p, &res, 1);
-
-        if (res < 0) { // такой res во всех потоках будет, т.к. сделали reduce sum.
-            // освободить память и всё прочее в main.
-            ap->res = res; // по этому флагу поймём в main всё норм отработало или нет.
-            // этот res проверим после pthread_join всех потоков в мэйне.
+        if (res < 0) { 
+            ap->res = res; 
+            delete[] block1;
+            delete[] block2;
+            delete[] block3;
+            delete[] main_row;
+            delete[] main_b;
+            delete[] vec;
             return nullptr;
         }
 
         init_b(a, b, n, m, p, k);
 
     } else {
-        init_matrix(a, n, m, s, p, k);
-        init_b(a, b, n, m, p, k);
+        init_arrays(a, b, n, m, s, p, k);
     }
 
+    
+    double a_norm = -1;
     if (k == 0) {
-        //output(a, n, r, n);      
-        //output(b, 1, r, n);  
+        output(a, n, r, n);      
+        a_norm = matrix_norm(n, n, a);
     }
-    reduce_sum<int>(p);
-    //t = get_cpu_time();
-    // solve(a, b, n, p, m, k);
-    // t = get_cpu_time() - t;
+    reduce_sum(p, &a_norm, 1, &maximum);
+
     /*
-    pthread_mutex_lock(&M);
-    std::cout << "РАБОТАЕТ ПОТОК ПОД НОМЕРОМ " << k << "\n\n\n";
-    int f = n / m;
-    for (int t = 0; t < f; ++t) {
-        std::cout << "ШАГ ПОД НОМЕРОМ " << t << "\n";
-        int q = t % p;
-        i = (k - q) >= 0 ? (t + k - q) * m : (t + k + p - q) * m;
-        for (; i < n; i += p*m) {
-            int h = (i + m < n) ? m : n - i;
-            for (int u = i; u < i + h; ++u) {
-                for (int j = t*m; j < n; ++j) {
-                    std::cout << a[n*u + j] << " ";                    
-                }
-                std::cout << "\n";
-            }                        
-        }
-    } 
-    std::cout << "ПОТОК ПОД НОМЕРОМ " << k << " ЗАКОНЧИЛ РАБОТУ" << "\n\n\n";
-    pthread_mutex_unlock(&M);
+    t = get_cpu_time();
+    solve(a, b, n, p, m, k);
+    t = get_cpu_time() - t;
     */
 
+    // вот она ниже моя solve функция пишется по сути. пока тут будет прост.
     int f = n / m;
     int l = n - f * m;
+    int h = l ? f + 1 : f;
+
     for (int t = 0; t < f; ++t) {
-        int q = t % p;
+        int q = t % p; // главная строка принадлежит q-ому потоку.
         i = (k - q) >= 0 ? (t + k - q) : (t + k + p - q);
         double max_norm_block = -1;
         int row_max_block = -1;
         for (; i < f; i += p) {
-            get_block(i, t, n, m, f, l, a, block);
-            double block_norm = matrix_norm(m, m, block);
-            // block_norm - EPS * a_norm надо. потом посчитаю a_norm, пока не надо и лень.
-            if (block_norm - EPS > max_norm_block && is_inv(m, block, 1, rows)) {
+            get_block(i, t, n, m, f, l, a, block1);
+            double block_norm = matrix_norm(m, m, block1);
+            if (block_norm - EPS * a_norm > max_norm_block && is_inv(m, block1, a_norm)) {
                 max_norm_block = block_norm;
                 row_max_block = i;
             }
-            /*
-            for (int v = 0; v < m; ++v) {
-                for (int z = 0; z < m; ++z) {
-                    std::cout << block[m*v + z] << " ";  
-                }
-                std::cout << "\n";
-            }
-            */
         }
 
-        pthread_mutex_lock(&M);
-        std::cout << "ШАГ " << t << ". РАБОТАЕТ ПОТОК ПОД НОМЕРОМ " << k << "\n";
-        std::cout << "Local max norm block: " << max_norm_block << " Row: " << row_max_block << "\n\n\n";
-        pthread_mutex_unlock(&M);
         vec[0] = max_norm_block;
         vec[1] = row_max_block;
-        reduce_sum(p, vec, 2, &max); //чтобы выбрать главный элемент по столбцу.
+        reduce_sum(p, vec, 2, &max); // чтобы выбрать главный элемент по столбцу.
         max_norm_block = vec[0];
         row_max_block = vec[1];
-        pthread_mutex_lock(&M);
-        std::cout << "ШАГ " << t << ". РАБОТАЕТ ПОТОК ПОД НОМЕРОМ " << k << "\n";
-        std::cout << "Global max norm block: " << max_norm_block << " Row: " << row_max_block << "\n\n\n";
-        pthread_mutex_unlock(&M);
+        if (row_max_block == -1) {
+            ap->method_not_applicable = true; // не применим, т.к. ни один поток не нашел обратный.
+            delete[] block1;
+            delete[] block2;
+            delete[] block3;
+            delete[] main_row;
+            delete[] main_b;
+            delete[] vec;
+            return nullptr;
+        }
+        
+        // у меня тупо один поток меняет строки и умножает на обратную, а все остальные потоки ждут...
+        // пока хз как это переписывать, напишу остальную логику и потом вернусь сюда.
+        if (k == q) {
+            // t-ую блочную строку надо поменять с row_max_block-ой.
+            swap_block_rows(a, t, row_max_block, 0, n, n, m);
+            
+            get_block(t, t, n, m, f, l, a, block1);
+            inverse_matrix(m, block1, block2, a_norm); 
+            
+            for (int j = t + 1; j < f; ++j) { // j = t + 1 тут надо, чтобы более эффективно было!
+                get_block(t, j, n, m, f, l, a, block1);
+                matrix_product(m, m, m, block2, block1, block3); 
+                put_block(t, j, n, m, f, l, block3, a);
+            }       
+
+            if (l) {
+                get_block(t, f, n, m, f, l, a, block1);
+                matrix_product(m, m, l, block2, block1, block3);
+                put_block(t, f, n, m, f, l, block3, a); 
+            }
+
+            //std::cout << row_max_block << "\n";
+            //output(a, n, n, n);
+            //std::cout << "\n\n";     
+
+            matrix_product(m, m, 1, block2, b + m * t, block3); 
+            put_vector(t, m, f, l, block3, b);
+        } 
+
+        /*
+        if (k == row_max_block % p) {
+            swap_block_rows(a, t, row_max_block, n / 2, n, n, m);            
+        } 
+        */
+
+        reduce_sum<int>(p);
+        
+        // копируем в каждый поток главную блочную строку и главную часть вектора b не забываем.
+        copy_block_row(a, main_row, n, m, t);
+        // на вектор b пока забью, поработаю сначала с матрицей.
+        
+        reduce_sum<int>(p);
+
+        i = (k - q) >= 0 ? (t + k - q) : (t + k + p - q);
+        i = (i > t) ? i : i + p; // нижележащие ведь. на себя бы самого не попасться бы типа.
+        for (; i < h; i += p) {
+            get_block(i, t, n, m, f, l, a, block1);
+            int multiplier_rows = i < f ? m : l;
+            for (int r = t + 1; r < h; ++r) { 
+                get_block(t, r, n, m, f, l, a, block2); 
+                int block_cols = r < f ? m : l;
+                //matr_prod(multiplier_rows, m, block_cols, block1, block2, block3);
+                //get_block(block_rows[q], r, n, m, k, l, matrix, block2);
+                //subtract_matrix_inplace(multiplier_rows, block_cols, block2, block3);
+                //put_block(block_rows[q], r, n, m, k, l, block2, matrix);
+            }
+        }
+        
+        /*
+        for (int q = i + 1; q < h; ++q) {
+            get_block(block_rows[q], i, n, m, k, l, matrix, block1); 
+            int multiplier_rows = q < k ? m : l;
+            for (int r = i + 1; r < h; ++r) { 
+                get_block(block_rows[i], r, n, m, k, l, matrix, block2); 
+                int block_cols = r < k ? m : l;
+                matr_prod(multiplier_rows, m, block_cols, block1, block2, block3);
+                get_block(block_rows[q], r, n, m, k, l, matrix, block2);
+                subtract_matrix_inplace(multiplier_rows, block_cols, block2, block3);
+                put_block(block_rows[q], r, n, m, k, l, block2, matrix);
+            }
+
+            matr_prod(multiplier_rows, m, 1, block1, b + m*block_rows[i], block3);
+            subtract_matrix_inplace(1, multiplier_rows, b + m*block_rows[q], block3);
+        }
+        */       
     } 
 
-    delete[] block;
-    delete[] rows;
+    delete[] block1;
+    delete[] block2;
+    delete[] block3;
+    delete[] main_row;
+    delete[] main_b;
     delete[] vec;
-    // delete[] block1;
 
+    reduce_sum<int>(p);
     return nullptr;
-}
-
-void get_block(int i, int j, int n, int m, int f, int l, double* matrix, double* block1) {
-    int h = i < f ? m : l;
-    int w = j < f ? m : l;
-    
-    int ind = 0;
-
-    for (int p = 0; p < h; ++p) {
-        for (int q = 0; q < w; ++q) {
-            block1[ind] = matrix[n * (m * i + p) + m * j + q];
-            ind++;
-        }
-    }
-}
-
-double matrix_norm(int n, int m, double* matrix) {
-    double norm = -1;
-    for (int j = 0; j < m; ++j) {
-        double sum = 0;
-        for (int i = 0; i < n; ++i) {
-            sum += std::fabs(matrix[m*i + j]);           
-        }
-
-        norm = std::max(norm, sum);
-    }
-
-    return norm;
-}
-
-bool is_inv(int m, double* matrix, double a_norm, int* rows) {
-    for (int k = 0; k < m; ++k) {
-        rows[k] = k;
-    }
-
-    for (int i = 0; i < m; ++i) {
-        double max_elem = matrix[rows[i] * m + i];
-        int row_max_elem = i;
-        for (int j = i + 1; j < m; ++j) {
-            if (std::fabs(matrix[rows[j] * m + i]) - EPS * a_norm > std::fabs(max_elem)) {
-                max_elem = matrix[rows[j] * m + i];
-                row_max_elem = j;
-            }
-        }
-
-        std::swap(rows[i], rows[row_max_elem]);
-
-        if (std::fabs(max_elem) < EPS * a_norm) {
-            return false;    
-        }
-
-        double factor = 1 / max_elem;
-        for (int s = i; s < m; ++s) {
-            matrix[rows[i] * m + s] *= factor;
-        }
-
-        for (int k = i + 1; k < m; ++k) {
-            double multiplier = -matrix[rows[k] * m + i];
-            for (int p = i + 1; p < m; ++p) { 
-                matrix[rows[k] * m + p] += matrix[rows[i] * m + p] * multiplier;
-            }
-        }
-    }
-
-    return true;
 }

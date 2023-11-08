@@ -1,15 +1,23 @@
 #define EPS 1e-14
 #pragma once
+#include <iostream>
 #include <string>
 #include <pthread.h>
 
-void init_matrix(double* matrix, int n, int m, int s, int p, int k);
-void init_b(double* matrix, double* b, int n, int m, int p, int k);
+void init_b(double* matrix, double* b, int n, int m, int p, int k) ;
+void init_arrays(double* matrix, double* b, int n, int m, int s, int p, int k);
 int read_array(double* array, int n, const std::string& name_file);
 void output(double* array, int n, int r, int l);
-void get_block(int i, int j, int n, int m, int k, int l, double* matrix, double* block1);
+void get_block(int i, int j, int n, int m, int f, int l, double* matrix, double* block1);
+void put_block(int i, int j, int n, int m, int k, int l, double* block, double* matrix);
+void put_vector(int i, int m, int k, int l, double* b_i, double* b);
 double matrix_norm(int n, int m, double* matrix);
-bool is_inv(int m, double* matrix, double a_norm, int* rows);
+bool is_inv(int m, double* matrix, double a_norm);
+bool inverse_matrix(int m, double* matrix, double* identity, double a_norm);
+void copy_block_row(double* a, double* main_row, int n, int m, int t);
+void swap_block_rows(double* a, int t, int row_max_block, int j_l, int j_r, int n, int m);
+void swap_rows(double* matrix, int n, int i, int j);
+void matrix_product(int n, int m, int k, double* a, double* b, double* c);
 void* thread_func(void* ptr);
 
 class Args {
@@ -25,6 +33,7 @@ public:
     int r = 0;
     int s = 0; // номер формулы для инициализации
     int res = 0; // результат чтения из файла
+    bool method_not_applicable = false;
     std::string filename;
 
     Args() = default;
@@ -52,8 +61,16 @@ void min(T* r, T* a, int n) {
 }
 
 template<class T>
+void maximum(T* r, T* a, int n) {
+    for (int i = 0; i < n; ++i) {
+        r[i] = std::max(r[i], a[i]);
+    }
+}
+
+template<class T>
 void max(T* r, T* a, int n) {
     if (n != 2) {
+        std::cout << "Ты не ту функцию передал в reduce sum" << "\n";
         return;
     }
     

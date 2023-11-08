@@ -1,5 +1,6 @@
 #include <fstream>
 #include <cmath>
+#include "inc.h"
 
 double f(int s, int n, int i, int j) { 
     switch(s) {
@@ -16,7 +17,8 @@ double f(int s, int n, int i, int j) {
     }
 }
 
-void init_matrix(double* matrix, int n, int m, int s, int p, int k) {
+void init_arrays(double* matrix, double* b, int n, int m, int s, int p, int k) {
+    // init matrix
     for (int i = k*m; i < n; i += p*m) { 
         int h = (i + m < n) ? m : n - i;
         for (int t = i; t < i + h; ++t) {
@@ -24,7 +26,21 @@ void init_matrix(double* matrix, int n, int m, int s, int p, int k) {
                 matrix[n * t + j] = f(s, n, t, j);
             }
         }
-    }       
+    }
+
+    // init b
+    for (int i = k*m; i < n; i += p*m) { 
+        int h = (i + m < n) ? m : n - i;
+        for (int t = i; t < i + h; ++t) {
+            double sum = 0;
+            for (int k = 0; k <= (n-1) / 2; ++k) {
+                sum += matrix[n * t + 2*k];
+            }
+            b[t] = sum; 
+        }
+    }   
+
+    reduce_sum<int>(p);
 }
 
 void init_b(double* matrix, double* b, int n, int m, int p, int k) {
@@ -37,7 +53,9 @@ void init_b(double* matrix, double* b, int n, int m, int p, int k) {
             }
             b[t] = sum; 
         }
-    }    
+    }
+
+    reduce_sum<int>(p);    
 }
 
 int read_array(double* array, int n, const std::string& name_file) {
