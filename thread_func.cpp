@@ -90,6 +90,9 @@ void* thread_func(void* ptr) {
         std::cout << "A:\n";
         output(a, n, r, n);
         std::cout << "\n";
+        std::cout << "b:\n";
+        output(b, n, r, 1);
+        std::cout << "\n";
         a_norm = matrix_norm(n, n, a);
     }
     reduce_sum(p, &a_norm, 1, &maximum);
@@ -155,11 +158,7 @@ void* thread_func(void* ptr) {
                 get_block(t, f, n, m, f, l, a, block1);
                 matrix_product(m, m, l, block2, block1, block3);
                 put_block(t, f, n, m, f, l, block3, a); 
-            }
-
-            //std::cout << row_max_block << "\n";
-            //output(a, n, n, n);
-            //std::cout << "\n\n";     
+            }    
 
             matrix_product(m, m, 1, block2, b + m * t, block3); 
             put_vector(t, m, f, l, block3, b);
@@ -231,7 +230,7 @@ void* thread_func(void* ptr) {
     // прямой ход метода Гаусса завершен.
     // Обратный ход:
 
-    for (int j = h - 1; j > 0; --j) {
+    for (int j = f; j > 0; --j) {
         int u_border = (j < f) ? m : l; 
         for (int u = 0; u < u_border; ++u) {
             main_b[u] = x[m*j + u]; // скопировали в каждый поток x_j.
