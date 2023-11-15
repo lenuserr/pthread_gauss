@@ -13,6 +13,7 @@
 // 16:00. Строки-то я поменял. Теперь надо подумать как менять у вектора b строки? Ну пока походу в тупую. Двумя потоками как бгч говорил крч.
 // 17:00. Какой-то пиздец.
 // 17:15. Бля, я даун, всё правильно работало. Идём дальше.
+// 18:00. Кажется дописываю прямой ход Гаусса.
 
 void* thread_func(void* ptr) {
     [[maybe_unused]] static pthread_mutex_t M = PTHREAD_MUTEX_INITIALIZER;
@@ -27,7 +28,7 @@ void* thread_func(void* ptr) {
     int p = ap->p;
     int k = ap->k;
     int s = ap->s;
-    //int r = ap->r;
+    int r = ap->r;
     std::string name = ap->filename;
     
     cpu_set_t cpu;
@@ -52,6 +53,8 @@ void* thread_func(void* ptr) {
     reduce_sum<int>(p);
     // здесь выделение локальных буферных массивов вспомогательных.
     double* block1 = new double[m*m];
+    double* block2 = new double[m*m];
+    double* block3 = new double[m*m];
     double* main_col = new double[n*m]; // копируем t-ый столбец сюда в каждом потоке типа.
     double* vec = new double[2];
 
@@ -65,6 +68,8 @@ void* thread_func(void* ptr) {
         if (res < 0) { 
             ap->res = res; 
             delete[] block1;
+            delete[] block2;
+            delete[] block3;
             delete[] main_col;
             delete[] vec;
             return nullptr;
@@ -78,16 +83,12 @@ void* thread_func(void* ptr) {
 
     double a_norm = -1;
     if (k == 0) {
-        //for (int i = 0; i < n; ++i) { std::cout << b[i] << " "; }
-        //std::cout << "\n\n";
-        /*
         std::cout << "A:\n";
         output(a, n, r, n);
         std::cout << "\n";
         std::cout << "b:\n";
         output(b, n, r, 1);
         std::cout << "\n";
-        */
         a_norm = matrix_norm(n, n, a);
     }
     reduce_sum(p, &a_norm, 1, &maximum);
@@ -100,8 +101,8 @@ void* thread_func(void* ptr) {
 
     // вот она ниже моя solve функция пишется по сути. пока тут будет прост.
     int f = n / m;
-    [[maybe_unused]] int l = n - f * m;
-    [[maybe_unused]] int h = l ? f + 1 : f;
+    int l = n - f * m;
+    int h = l ? f + 1 : f;
 
     for (int t = 0; t < f; ++t) {
         // скопировать t-ый столбец в каждый поток. (в main_col)
@@ -122,6 +123,15 @@ void* thread_func(void* ptr) {
         reduce_sum(p, vec, 2, &max); // чтобы выбрать главный элемент по столбцу.
         max_norm_block = vec[0];
         row_max_block = vec[1];
+        if (row_max_block == -1) {
+            ap->method_not_applicable = true; // не применим, т.к. ни один поток не нашел обратный.
+            delete[] block1;
+            delete[] block2;
+            delete[] block3;
+            delete[] main_col;
+            delete[] vec;
+            return nullptr;
+        }
 
         // в каждом потоке поменяем main_col на тот, который теперь будет после перестановки строк. 
         for (int u = 0; u < m; ++u) {
@@ -131,11 +141,86 @@ void* thread_func(void* ptr) {
         }
 
         // row_max_block нужно переставить с t-ой строкой.
-        swap_block_rows(a, b, row_max_block, t, n, m, f, l, h, p, k);   
-        // переходим к пункту 3.2 из отчёта.     
+        swap_block_rows(a, b, row_max_block, t, n, m, f, l, h, p, k); // т.синхр. стоит в конце ф-ции.
+        // переходим к пункту 3.2 из отчёта. Умножаем строку на обратную матрицу главного элемента.
+        get_block(t, 0, m, m, f, l, main_col, block1);     
+        inverse_matrix(m, block1, block2, a_norm); 
+        // в block2 обратная матрица, на которую строку будем ща умножать.
+        
+        for (int q = t + k; q < f; q += p) { // +1 верни
+            get_block(t, q, n, m, f, l, a, block1); 
+            matrix_product(m, m, m, block2, block1, block3); 
+            put_block(t, q, n, m, f, l, block3, a);
+        }
+
+        if (l && k == f % p) {
+            get_block(t, f, n, m, f, l, a, block1);
+            matrix_product(m, m, l, block2, block1, block3);
+            put_block(t, f, n, m, f, l, block3, a);
+        }
+
+        if (k == t % p) {
+            matrix_product(m, m, 1, block2, b + m * t, block3); 
+            put_vector(t, m, f, l, block3, b);
+        }
+        reduce_sum<int>(p); // третья точка синхронизации в алгоритме (по отчёту).
+
+        // Складываем теперь строки, епта.
+        for (int q = t + 1; q < h; ++q) { 
+            get_block(q, t, n, m, f, l, a, block1); // множитель
+            int multiplier_rows = q < f ? m : l;
+            for (int v = t + k; v < h; v += p) { // +1 верни
+                get_block(t, v, n, m, f, l, a, block2); 
+                int block_cols = v < f ? m : l;
+                matrix_product(multiplier_rows, m, block_cols, block1, block2, block3);
+                get_block(q, v, n, m, f, l, a, block2);
+                subtract_matrix_inplace(multiplier_rows, block_cols, block2, block3);
+                put_block(q, v, n, m, f, l, block2, a);
+            }
+
+            if (k == t % p) {
+                matrix_product(multiplier_rows, m, 1, block1, b + m*t, block3);
+            }
+
+            if (k == q % p) {
+                subtract_matrix_inplace(1, multiplier_rows, b + m*q, block3);
+            }
+
+            reduce_sum<int>(p); // четвертая точка синхронизации в алгоритме (по отчёту).
+        }
+    }
+    // прямой ход Гаусса завершен! 
+    // ща посмотрю, что матрица становится верхнетреугольной, а потом верну + 1 в циклах!!!
+
+    if (l) {
+        int res = 0;
+        if (k == f % p) {
+            get_block(f, f, n, m, f, l, a, block1);  
+            if (inverse_matrix(l, block1, block2, a_norm)) {
+                matrix_product(l, l, 1, block2, b + m*f, block3);
+                put_vector(f, m, f, l, block3, x);
+            } else {
+                res = -1;
+            }
+        }
+
+        reduce_sum(p, &res, 1, &sum);
+        if (res < 0) { 
+            ap->method_not_applicable = true; 
+            delete[] block1;
+            delete[] block2;
+            delete[] block3;
+            delete[] main_col;
+            delete[] vec;
+            return nullptr;
+        }
     }
 
+    // Осталось по отчёту сделать обратный ход Гаусса.
+
     delete[] block1;
+    delete[] block2;
+    delete[] block3;
     delete[] main_col;
     delete[] vec;
 

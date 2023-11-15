@@ -6,7 +6,6 @@ void output(double* array, int n, int r, int l) {
     for (int i = 0; i < h; ++i) {
         for (int j = 0; j < w; ++j) {
             printf("%10.3e ", array[n*i + j]);
-            //printf("%d ", (int)array[n*i + j]);
         }
         printf("\n");
     }
