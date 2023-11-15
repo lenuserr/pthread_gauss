@@ -97,7 +97,7 @@ void* thread_func(void* ptr) {
         copy_block_col(a, main_col, n, m, t);
         double max_norm_block = -1;
         int row_max_block = -1;
-        for (int i = t + k; i < f; i += p) {
+        for (int i = t + k; i < f; i += p) { 
             get_block(i, 0, m, m, f, l, main_col, block1);
             double block_norm = matrix_norm(m, m, block1);
             if (block_norm - EPS * a_norm > max_norm_block && is_inv(m, block1, a_norm)) {
@@ -135,7 +135,7 @@ void* thread_func(void* ptr) {
         inverse_matrix(m, block1, block2, a_norm); 
         // в block2 обратная матрица, на которую строку будем ща умножать.
 
-        for (int q = t + k + 1; q < f; q += p) { 
+        for (int q = t + k + 1; q < f; q += p) { // ТУТ ПЛОХО ПО ПОТОКАМ СТОЛБЦЫ РОЗДАНЫ. (q)
             get_block(t, q, n, m, f, l, a, block1); 
             matrix_product(m, m, m, block2, block1, block3); 
             put_block(t, q, n, m, f, l, block3, a);
@@ -157,7 +157,7 @@ void* thread_func(void* ptr) {
         for (int q = t + 1; q < h; ++q) { 
             get_block(q, t, n, m, f, l, a, block1); // множитель
             int multiplier_rows = q < f ? m : l;
-            for (int v = t + k + 1; v < h; v += p) { 
+            for (int v = t + k + 1; v < h; v += p) { // ТУТ ПЛОХО ПО ПОТОКАМ СТОЛБЦЫ РОЗДАНЫ. (v)
                 get_block(t, v, n, m, f, l, a, block2); 
                 int block_cols = v < f ? m : l;
                 matrix_product(multiplier_rows, m, block_cols, block1, block2, block3);
@@ -206,7 +206,20 @@ void* thread_func(void* ptr) {
         }
     }
 
-    // Осталось по отчёту сделать обратный ход Гаусса.
+    // Осталось по отчёту сделать обратный ход Гаусса и усё.
+
+    for (int i = f - 1; i >= 0; --i) {
+        for (int vv = 0; vv < m; ++vv) { 
+            block2[vv] = 0;
+        }
+
+        for (int j = i + k + 1; j < h; j += p) { // ТУТ ПЛОХО ПО ПОТОКАМ СТОЛБЦЫ РОЗДАНЫ. (j)
+            get_block(i, j, n, m, f, l, a, block1); 
+            int cols = j < f ? m : l;
+            matrix_product(m, cols, 1, block1, x + m*j, block3);
+        }
+    }
+
 
     delete[] block1;
     delete[] block2;
