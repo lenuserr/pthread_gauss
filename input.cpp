@@ -19,12 +19,12 @@ double f(int s, int n, int i, int j) {
 
 void init_arrays(double* matrix, double* b, int n, int m, int s, int p, int k) {
     // init matrix
-    for (int i = k*m; i < n; i += p*m) { 
-        int h = (i + m < n) ? m : n - i;
-        for (int t = i; t < i + h; ++t) {
-            for (int j = 0; j < n; ++j) {
-                matrix[n * t + j] = f(s, n, t, j);
-            }
+    for (int j = k*m; j < n; j += p*m) {
+        int h = (j + m < n) ? m : n - j;
+        for (int i = 0; i < n; ++i) {
+            for (int v = 0; v < h; ++v) {
+                matrix[i*n + j + v] = f(s, n, i, j + v);
+            }   
         }
     }
 

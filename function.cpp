@@ -1,5 +1,6 @@
 #define EPS 1e-14
 #include <cmath>
+#include "inc.h"
 
 void swap_rows(double* matrix, int n, int i, int j) {
     for (int k = 0; k < n; ++k) {
@@ -7,20 +8,40 @@ void swap_rows(double* matrix, int n, int i, int j) {
     }
 }
 
-void copy_block_row(double* a, double* main_row, int n, int m, int t) {
-    for (int u = 0; u < m; ++u) {
-        for (int j = 0; j < n; ++j) {
-            main_row[n*u + j] = a[n * (m * t + u) + j];  
+void copy_block_col(double* a, double* main_col, int n, int m, int t) {
+    for (int i = t*m; i < n; ++i) {
+        for (int j = 0; j < m; ++j) {
+            main_col[m*i + j] = a[n*i + t*m + j];
         }
-    }
+    }      
 }
 
-void swap_block_rows(double* a, int t, int row_max_block, int j_l, int j_r, int n, int m) {
-    for (int u = 0; u < m; ++u) {
-        for (int j = j_l; j < j_r; ++j) {
-            std::swap(a[n * (m * t + u) + j], a[n * (m * row_max_block + u) + j]);  
+void swap_block_rows(double* a, double* b, int row_max_block, int t, int n, int m, int f, int l, int h, int p, int k) {
+    for (int j = t + k; j < h; j += p) {
+        int v_max = (j < f) ? m : l;
+        for (int u = 0; u < m; ++u) {
+            for (int v = 0; v < v_max; ++v) {
+                std::swap(a[n * (m * row_max_block + u) + m * j + v], a[n * (m * t + u) + m * j + v]);
+            }
         }
     }
+
+    // переставляю две блочные строки у вектора b.
+    int k1 = t % p;
+    int k2 = row_max_block % p;
+    if (k == k1) {
+        for (int u = 0; u < m / 2; u++) {
+            std::swap(b[m*row_max_block + u], b[m*t + u]);    
+        }
+    }
+
+    if (k == k2) {
+        for (int u = m / 2; u < m; u++) {
+            std::swap(b[m*row_max_block + u], b[m*t + u]);    
+        }
+    }
+
+    reduce_sum<int>(p); // вторая точка синхронизации в алгоритме (по отчёту).
 }
 
 void get_block(int i, int j, int n, int m, int f, int l, double* matrix, double* block1) {
@@ -34,6 +55,15 @@ void get_block(int i, int j, int n, int m, int f, int l, double* matrix, double*
             block1[ind] = matrix[n * (m * i + p) + m * j + q];
             ind++;
         }
+    }
+}
+
+void print_block(double* block, int m) {
+    for (int u = 0; u < m; ++u) {
+        for (int v = 0; v < m; ++v) {
+            std::cout << block[m*u + v] << " ";
+        }
+        std::cout << "\n";
     }
 }
 

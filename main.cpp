@@ -40,23 +40,7 @@ int main(int argc, char* argv[]) {
         pthread_join(tid[k], 0);
     }
 
-    if (ap[0].res < 0) {
-        std::cout << "Problems reading from a file " << filename << "\n";
-        delete[] a; delete[] b; delete[] x;
-        delete[] ap; delete[] tid;   
-        return -1;  
-    }        
-
-    if (ap[0].method_not_applicable) {
-        std::cout << "Method is not applicable" << "\n";
-        delete[] a; delete[] b; delete[] x;
-        delete[] ap; delete[] tid;   
-        return -2;
-    }
-
-    std::cout << "x:\n";
-    output(x, n, r, 1);
-    std::cout << "\n";
+    //output(a, n, r, n);
 
     delete[] a; delete[] b; delete[] x;
     delete[] ap; delete[] tid;    
