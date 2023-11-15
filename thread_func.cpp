@@ -3,18 +3,6 @@
 #include <sched.h>
 #include "inc.h"
 
-// 15.11.23. 13:00.
-// Переписываю код по столбцам (ровно так как у меня в отчёте в общем)
-// 14:00. Уже полным ходом пишу выбор главного элемента, затем прямой ход. Work, work.
-// Сегодня-завтра должен всё написать (даже с учетом просмотра лекции по град.бустингу today).
-// Просто работай и всё получится.
-// 15:15. Выбор главного элемента сделал. Переставляем строки как написано в отчете.
-// 15:50. Переставляю строки. Ещё шуть-шуть. Прямой метод Гаусса должен до 19 00 кончить с едой.
-// 16:00. Строки-то я поменял. Теперь надо подумать как менять у вектора b строки? Ну пока походу в тупую. Двумя потоками как бгч говорил крч.
-// 17:00. Какой-то пиздец.
-// 17:15. Бля, я даун, всё правильно работало. Идём дальше.
-// 18:00. Кажется дописываю прямой ход Гаусса.
-
 void* thread_func(void* ptr) {
     [[maybe_unused]] static pthread_mutex_t M = PTHREAD_MUTEX_INITIALIZER;
     
@@ -146,8 +134,8 @@ void* thread_func(void* ptr) {
         get_block(t, 0, m, m, f, l, main_col, block1);     
         inverse_matrix(m, block1, block2, a_norm); 
         // в block2 обратная матрица, на которую строку будем ща умножать.
-        
-        for (int q = t + k; q < f; q += p) { // +1 верни
+
+        for (int q = t + k + 1; q < f; q += p) { 
             get_block(t, q, n, m, f, l, a, block1); 
             matrix_product(m, m, m, block2, block1, block3); 
             put_block(t, q, n, m, f, l, block3, a);
@@ -169,7 +157,7 @@ void* thread_func(void* ptr) {
         for (int q = t + 1; q < h; ++q) { 
             get_block(q, t, n, m, f, l, a, block1); // множитель
             int multiplier_rows = q < f ? m : l;
-            for (int v = t + k; v < h; v += p) { // +1 верни
+            for (int v = t + k + 1; v < h; v += p) { 
                 get_block(t, v, n, m, f, l, a, block2); 
                 int block_cols = v < f ? m : l;
                 matrix_product(multiplier_rows, m, block_cols, block1, block2, block3);
@@ -180,11 +168,13 @@ void* thread_func(void* ptr) {
 
             if (k == t % p) {
                 matrix_product(multiplier_rows, m, 1, block1, b + m*t, block3);
-            }
-
-            if (k == q % p) {
                 subtract_matrix_inplace(1, multiplier_rows, b + m*q, block3);
             }
+
+            // или тут сделать ещё один лишний редус sum.
+            //if (k == q % p) {
+            //    subtract_matrix_inplace(1, multiplier_rows, b + m*q, block3);
+            //}
 
             reduce_sum<int>(p); // четвертая точка синхронизации в алгоритме (по отчёту).
         }

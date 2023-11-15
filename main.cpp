@@ -40,8 +40,12 @@ int main(int argc, char* argv[]) {
         pthread_join(tid[k], 0);
     }
 
-    std::cout << "\n\n";
+    std::cout << "A:\n";
     output(a, n, r, n);
+    std::cout << "\n";
+    std::cout << "x:\n";
+    output(x, n, r, 1);
+    std::cout << "\n";
 
     delete[] a; delete[] b; delete[] x;
     delete[] ap; delete[] tid;    

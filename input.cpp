@@ -28,6 +28,7 @@ void init_arrays(double* matrix, double* b, int n, int m, int s, int p, int k) {
         }
     }
 
+    reduce_sum<int>(p); // иначе неправильный b будет, так как b и matrix лазиют к разным частям.
     // init b
     for (int i = k*m; i < n; i += p*m) { 
         int h = (i + m < n) ? m : n - i;
