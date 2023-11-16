@@ -38,11 +38,11 @@ public:
     double t = 0;
     int n = 0;
     int m = 0;
-    int p = 0; // общее число потоков
-    int k = 0; // номер потока
+    int p = 0; 
+    int k = 0; 
     int r = 0;
-    int s = 0; // номер формулы для инициализации
-    int res = 0; // результат чтения из файла
+    int s = 0; 
+    int res = 0; 
     bool method_not_applicable = false;
     std::string filename;
 

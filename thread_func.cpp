@@ -160,11 +160,6 @@ void* thread_func(void* ptr) {
                 subtract_matrix_inplace(1, multiplier_rows, b + m*q, block3);
             }
 
-            // или тут сделать ещё один лишний редус sum.
-            //if (k == q % p) {
-            //    subtract_matrix_inplace(1, multiplier_rows, b + m*q, block3);
-            //}
-
             reduce_sum<int>(p);
         }
     }
