@@ -3,13 +3,7 @@
 #include <sched.h>
 #include "inc.h"
 
-// 16.11.23. 00:00. Фиксю плохое разделение по столбцам. Ключевое слохо ПЛОХО.
-// 00:30. В двух из трех мест поправил обращение не к своим столбцам, то есть ПЛОХИЕ столбцы.
-// Потом ещё внимательно посмотришь на обращения к своим и не своим, а пока обратный ход допиши.
-
 void* thread_func(void* ptr) {
-    [[maybe_unused]] static pthread_mutex_t M = PTHREAD_MUTEX_INITIALIZER;
-    
     Args* ap = (Args*)ptr;
     double* a = ap->a;
     double* b = ap->b;
@@ -43,16 +37,15 @@ void* thread_func(void* ptr) {
     }
 
     reduce_sum<int>(p);
-    // здесь выделение локальных буферных массивов вспомогательных.
     double* block1 = new double[m*m];
     double* block2 = new double[m*m];
     double* block3 = new double[m*m];
-    double* main_col = new double[n*m]; // копируем t-ый столбец сюда в каждом потоке типа.
+    double* main_col = new double[n*m]; 
     double* vec = new double[2];
 
     if (!name.empty()) {
         int res = 0;
-        if (k == 0) { // главный поток
+        if (k == 0) { 
             res = read_array(a, n, name);
         }
 
@@ -78,47 +71,38 @@ void* thread_func(void* ptr) {
         std::cout << "A:\n";
         output(a, n, r, n);
         std::cout << "\n";
-        std::cout << "b:\n";
-        output(b, n, r, 1);
-        std::cout << "\n";
         a_norm = matrix_norm(n, n, a);
     }
     reduce_sum(p, &a_norm, 1, &maximum);
 
-    /*
-    t = get_cpu_time();
-    solve(a, b, n, p, m, k);
-    t = get_cpu_time() - t;
-    */
-
     ap->t = get_cpu_time();
 
-    // вот она ниже моя solve функция пишется по сути. пока тут будет прост.
     int f = n / m;
     int l = n - f * m;
     int h = l ? f + 1 : f;
 
     for (int t = 0; t < f; ++t) {
-        // скопировать t-ый столбец в каждый поток. (в main_col)
         copy_block_col(a, main_col, n, m, t);
         double max_norm_block = -1;
         int row_max_block = -1;
         for (int i = t + k; i < f; i += p) { 
             get_block(i, 0, m, m, f, l, main_col, block1);
-            double block_norm = matrix_norm(m, m, block1);
-            if (block_norm - EPS * a_norm > max_norm_block && is_inv(m, block1, a_norm)) {
-                max_norm_block = block_norm;
-                row_max_block = i;
+            if (is_inv(m, block1, a_norm)) {
+                double block_norm = matrix_norm(m, m, block1);
+                if (block_norm - EPS * a_norm > max_norm_block) {
+                    max_norm_block = block_norm;
+                    row_max_block = i;
+                }
             }
         }
 
         vec[0] = max_norm_block;
         vec[1] = row_max_block;
-        reduce_sum(p, vec, 2, &max); // чтобы выбрать главный элемент по столбцу.
+        reduce_sum(p, vec, 2, &max); 
         max_norm_block = vec[0];
         row_max_block = vec[1];
         if (row_max_block == -1) {
-            ap->method_not_applicable = true; // не применим, т.к. ни один поток не нашел обратный.
+            ap->method_not_applicable = true; 
             delete[] block1;
             delete[] block2;
             delete[] block3;
@@ -127,19 +111,15 @@ void* thread_func(void* ptr) {
             return nullptr;
         }
 
-        // в каждом потоке поменяем main_col на тот, который теперь будет после перестановки строк. 
         for (int u = 0; u < m; ++u) {
             for (int v = 0; v < m; ++v) {
                 std::swap(main_col[m*(m*row_max_block + u) + v], main_col[m*(m*t + u) + v]);
             }
         }
 
-        // row_max_block нужно переставить с t-ой строкой.
-        swap_block_rows(a, b, row_max_block, t, n, m, f, l, h, p, k); // т.синхр. стоит в конце ф-ции.
-        // переходим к пункту 3.2 из отчёта. Умножаем строку на обратную матрицу главного элемента.
+        swap_block_rows(a, b, row_max_block, t, n, m, f, l, h, p, k); 
         get_block(t, 0, m, m, f, l, main_col, block1);     
         inverse_matrix(m, block1, block2, a_norm); 
-        // в block2 обратная матрица, на которую строку будем ща умножать.
 
         int main_thread = (t + 1) % p;
         int q = (k >= main_thread) ? t + 1 + k - main_thread : t + 1 + k - main_thread + p;
@@ -159,11 +139,10 @@ void* thread_func(void* ptr) {
             matrix_product(m, m, 1, block2, b + m * t, block3); 
             put_vector(t, m, f, l, block3, b);
         }
-        reduce_sum<int>(p); // третья точка синхронизации в алгоритме (по отчёту).
+        reduce_sum<int>(p); 
 
-        // Складываем теперь строки, епта.
         for (q = t + 1; q < h; ++q) { 
-            get_block(q, t, n, m, f, l, a, block1); // множитель
+            get_block(q, t, n, m, f, l, a, block1); 
             int multiplier_rows = q < f ? m : l;
             main_thread = (t + 1) % p;
             int v = (k >= main_thread) ? t + 1 + k - main_thread : t + 1 + k - main_thread + p;
@@ -186,12 +165,10 @@ void* thread_func(void* ptr) {
             //    subtract_matrix_inplace(1, multiplier_rows, b + m*q, block3);
             //}
 
-            reduce_sum<int>(p); // четвертая точка синхронизации в алгоритме (по отчёту).
+            reduce_sum<int>(p);
         }
     }
-    // прямой ход Гаусса завершен! 
-    // ща посмотрю, что матрица становится верхнетреугольной, а потом верну + 1 в циклах!!!
-
+    
     if (l) {
         int res = 0;
         if (k == f % p) {
@@ -216,15 +193,15 @@ void* thread_func(void* ptr) {
         }
     }
 
-    // Осталось по отчёту сделать обратный ход Гаусса и усё.
-    
     for (int i = f - 1; i >= 0; --i) {
         for (int vv = 0; vv < m; ++vv) { 
             block2[vv] = 0;
         }
 
-        for (int j = i + k + 1; j < h; j += p) { // ТУТ ПЛОХО ПО ПОТОКАМ СТОЛБЦЫ РОЗДАНЫ. (j)
-            get_block(i, j, n, m, f, l, a, block1); // СНАЧАЛА НАПИШУ С ПЛОХИМИ СТОЛБЦАМИ, ПОТОМ ИСПРАВЛЮ.
+        int main_thread = (i + 1) % p;
+        int j = (k >= main_thread) ? i + 1 + k - main_thread : i + 1 + k - main_thread + p;
+        for (; j < h; j += p) { 
+            get_block(i, j, n, m, f, l, a, block1);
             int cols = j < f ? m : l;
             matrix_product(m, cols, 1, block1, x + m*j, block3);
 
@@ -253,5 +230,6 @@ void* thread_func(void* ptr) {
     delete[] main_col;
     delete[] vec;
 
+    reduce_sum<int>(p);
     return nullptr;
 }

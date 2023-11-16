@@ -2,7 +2,6 @@
 #include "inc.h"
 
 int main(int argc, char* argv[]) {
-    // ./a.out n m p r s filename
     const int task = 9;
 
     int n = std::stoi(argv[1]);
@@ -10,7 +9,7 @@ int main(int argc, char* argv[]) {
     int p = std::stoi(argv[3]);
     int r = std::stoi(argv[4]);
     int s = std::stoi(argv[5]);
-    int k = 0; // номер потока
+    int k = 0; 
     std::string filename;
     if (!s) {
         filename = argv[argc - 1];
@@ -74,12 +73,14 @@ int main(int argc, char* argv[]) {
 
     double* c = new double[n];
     double* d = new double[n];
+    double t2 = get_cpu_time();
     double r1 = r1_eval(n, a, x, b, c, d);
     double r2 = r2_eval(n, x);
+    t2 = get_cpu_time() - t2;
 
     printf (
     "%s : Task = %d Res1 = %e Res2 = %e T1 = %.2f T2 = %.2f S = %d N = %d M = %d P = %d\n",
-    argv[0], task, r1, r2, t1, 0., s, n, m, p);
+    argv[0], task, r1, r2, t1, t2, s, n, m, p);
 
     delete[] a; delete[] b; delete[] x;
     delete[] ap; delete[] tid;    

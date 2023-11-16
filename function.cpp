@@ -27,7 +27,6 @@ void swap_block_rows(double* a, double* b, int row_max_block, int t, int n, int 
         }
     }
 
-    // переставляю две блочные строки у вектора b.
     int k1 = t % p;
     int k2 = row_max_block % p;
     if (k == k1) {
@@ -42,7 +41,7 @@ void swap_block_rows(double* a, double* b, int row_max_block, int t, int n, int 
         }
     }
 
-    reduce_sum<int>(p); // вторая точка синхронизации в алгоритме (по отчёту).
+    reduce_sum<int>(p); 
 }
 
 void get_block(int i, int j, int n, int m, int f, int l, double* matrix, double* block1) {
@@ -226,9 +225,10 @@ void matrix_product(int n, int m, int k, double* a, double* b, double* c) {
         for (int j = h3; j < k; j+=3) {
             sum00 = 0; sum01 = 0; sum02 = 0;
             for (int p = 0; p < m; ++p) {
-                sum00 += a[m*i + p] * b[k*p + j];
-                sum01 += a[m*i + p] * b[k*p + j + 1];
-                sum02 += a[m*i + p] * b[k*p + j + 2];
+                double factor = a[m*i + p];
+                sum00 += factor * b[k*p + j];
+                sum01 += factor * b[k*p + j + 1];
+                sum02 += factor * b[k*p + j + 2];
             }
             c[k*i + j] = sum00;
             c[k*i + j + 1] = sum01;
@@ -240,9 +240,10 @@ void matrix_product(int n, int m, int k, double* a, double* b, double* c) {
         for (int j = 0; j < h3; ++j) {
             sum00 = 0; sum01 = 0; sum02 = 0;
             for (int p = 0; p < m; ++p) {
-                sum00 += a[m*i + p] * b[k*p + j];
-                sum01 += a[m*(i + 1) + p] * b[k*p + j];
-                sum02 += a[m*(i + 2) + p] * b[k*p + j];
+                double factor = b[k*p + j];
+                sum00 += a[m*i + p] * factor;
+                sum01 += a[m*(i + 1) + p] * factor;
+                sum02 += a[m*(i + 2) + p] * factor;
             }
             c[k*i + j] = sum00;
             c[k*(i + 1) + j] = sum01;
