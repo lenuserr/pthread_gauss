@@ -1,5 +1,6 @@
 #define EPS 1e-14
 #include <cmath>
+#include <sys/resource.h>
 #include "inc.h"
 
 void swap_rows(double* matrix, int n, int i, int j) {
@@ -273,4 +274,25 @@ void matrix_product(int n, int m, int k, double* a, double* b, double* c) {
             c[k*(i + 2) + j + 2] = sum22;
         }
     }    
+}
+
+void subtract_vector(int n, double* a, double* b, double* c) {   
+    for (int i = 0; i < n; ++i) {
+        c[i] = a[i] - b[i];
+    }
+}
+
+double vector_norm(int n, double* vec) {
+    double norm = 0;
+    for (int i = 0; i < n; ++i) {
+        norm += std::fabs(vec[i]);        
+    }
+
+    return norm;
+}
+
+double get_cpu_time() {
+    struct rusage buf;
+    getrusage(RUSAGE_THREAD, &buf);
+    return buf.ru_utime.tv_sec + buf.ru_utime.tv_usec * 1e-6;
 }

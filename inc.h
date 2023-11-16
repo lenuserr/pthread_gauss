@@ -20,6 +20,13 @@ bool inverse_matrix(int m, double* matrix, double* identity, double a_norm);
 void copy_block_col(double* a, double* main_col, int n, int m, int t);
 void matrix_product(int n, int m, int k, double* a, double* b, double* c);
 void subtract_matrix_inplace(int n, int m, double* a, double* b);
+double r1_eval(int n, double* matrix, double* x, double* b, double* c, double* d);
+double r2_eval(int n, double* x);
+void subtract_vector(int n, double* a, double* b, double* c);
+double vector_norm(int n, double* vec);
+void simple_input_matrix(int s, int n, double* matrix);
+void simple_input_b(int n, double* matrix, double* b);
+double get_cpu_time();
 void* thread_func(void* ptr);
 
 class Args {
@@ -28,6 +35,7 @@ public:
     double* b = nullptr;    
     double* x = nullptr;      
 
+    double t = 0;
     int n = 0;
     int m = 0;
     int p = 0; // общее число потоков

@@ -59,6 +59,24 @@ void init_b(double* matrix, double* b, int n, int m, int p, int k) {
     reduce_sum<int>(p);    
 }
 
+void simple_input_matrix(int s, int n, double* matrix) {
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            matrix[n * i + j] = f(s, n, i, j);
+        }
+    }       
+}
+
+void simple_input_b(int n, double* matrix, double* b) {
+    for (int i = 0; i < n; ++i) {
+        double sum = 0;
+        for (int k = 0; k <= (n-1) / 2; ++k) {
+            sum += matrix[n * i + 2*k];
+        }
+        b[i] = sum; 
+    } 
+}
+
 int read_array(double* array, int n, const std::string& name_file) {
     std::ifstream fin(name_file);
     

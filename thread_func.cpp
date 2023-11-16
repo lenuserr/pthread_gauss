@@ -3,6 +3,10 @@
 #include <sched.h>
 #include "inc.h"
 
+// 16.11.23. 00:00. Фиксю плохое разделение по столбцам. Ключевое слохо ПЛОХО.
+// 00:30. В двух из трех мест поправил обращение не к своим столбцам, то есть ПЛОХИЕ столбцы.
+// Потом ещё внимательно посмотришь на обращения к своим и не своим, а пока обратный ход допиши.
+
 void* thread_func(void* ptr) {
     [[maybe_unused]] static pthread_mutex_t M = PTHREAD_MUTEX_INITIALIZER;
     
@@ -87,6 +91,8 @@ void* thread_func(void* ptr) {
     t = get_cpu_time() - t;
     */
 
+    ap->t = get_cpu_time();
+
     // вот она ниже моя solve функция пишется по сути. пока тут будет прост.
     int f = n / m;
     int l = n - f * m;
@@ -135,7 +141,9 @@ void* thread_func(void* ptr) {
         inverse_matrix(m, block1, block2, a_norm); 
         // в block2 обратная матрица, на которую строку будем ща умножать.
 
-        for (int q = t + k + 1; q < f; q += p) { // ТУТ ПЛОХО ПО ПОТОКАМ СТОЛБЦЫ РОЗДАНЫ. (q)
+        int main_thread = (t + 1) % p;
+        int q = (k >= main_thread) ? t + 1 + k - main_thread : t + 1 + k - main_thread + p;
+        for (; q < f; q += p) { 
             get_block(t, q, n, m, f, l, a, block1); 
             matrix_product(m, m, m, block2, block1, block3); 
             put_block(t, q, n, m, f, l, block3, a);
@@ -154,10 +162,12 @@ void* thread_func(void* ptr) {
         reduce_sum<int>(p); // третья точка синхронизации в алгоритме (по отчёту).
 
         // Складываем теперь строки, епта.
-        for (int q = t + 1; q < h; ++q) { 
+        for (q = t + 1; q < h; ++q) { 
             get_block(q, t, n, m, f, l, a, block1); // множитель
             int multiplier_rows = q < f ? m : l;
-            for (int v = t + k + 1; v < h; v += p) { // ТУТ ПЛОХО ПО ПОТОКАМ СТОЛБЦЫ РОЗДАНЫ. (v)
+            main_thread = (t + 1) % p;
+            int v = (k >= main_thread) ? t + 1 + k - main_thread : t + 1 + k - main_thread + p;
+            for (; v < h; v += p) { 
                 get_block(t, v, n, m, f, l, a, block2); 
                 int block_cols = v < f ? m : l;
                 matrix_product(multiplier_rows, m, block_cols, block1, block2, block3);
@@ -207,19 +217,35 @@ void* thread_func(void* ptr) {
     }
 
     // Осталось по отчёту сделать обратный ход Гаусса и усё.
-
+    
     for (int i = f - 1; i >= 0; --i) {
         for (int vv = 0; vv < m; ++vv) { 
             block2[vv] = 0;
         }
 
         for (int j = i + k + 1; j < h; j += p) { // ТУТ ПЛОХО ПО ПОТОКАМ СТОЛБЦЫ РОЗДАНЫ. (j)
-            get_block(i, j, n, m, f, l, a, block1); 
+            get_block(i, j, n, m, f, l, a, block1); // СНАЧАЛА НАПИШУ С ПЛОХИМИ СТОЛБЦАМИ, ПОТОМ ИСПРАВЛЮ.
             int cols = j < f ? m : l;
             matrix_product(m, cols, 1, block1, x + m*j, block3);
-        }
-    }
 
+            for (int p = 0; p < m; ++p) {
+                block2[p] += block3[p];
+            }
+        }
+
+        reduce_sum(p, block2, m, &sum);
+
+        if (k == i % p) {
+            for (int p = 0; p < m; ++p) {
+                b[m*i + p] -= block2[p]; 
+            }
+
+            put_vector(i, m, f, l, b + m*i, x);
+        }
+        
+        reduce_sum<int>(p);
+    }
+    
 
     delete[] block1;
     delete[] block2;
